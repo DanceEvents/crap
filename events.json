@@ -1,0 +1,44 @@
+[
+  {
+    "id": "ev1",
+    "title": "Salsa Night at Havana Club",
+    "style": "salsa",
+    "city": "Copenhagen",
+    "venue": "Havana Club",
+    "address": "Vesterbrogade 10, 1620 København",
+    "start": "2025-08-20T20:00:00",
+    "end": "2025-08-20T23:30:00",
+    "price": "100 DKK",
+    "url": "https://havanaclub.dk/events/salsa-night",
+    "organizer": "Havana Club",
+    "notes": ""
+  },
+  {
+    "id": "ev2",
+    "title": "Bachata Beginners Workshop",
+    "style": "bachata",
+    "city": "Aarhus",
+    "venue": "Dance Studio Aarhus",
+    "address": "Frederiksgade 12, 8000 Aarhus",
+    "start": "2025-08-22T18:30:00",
+    "end": "2025-08-22T20:00:00",
+    "price": "80 DKK",
+    "url": "https://dancestudioaarhus.dk/bachata-beginners",
+    "organizer": "Dance Studio Aarhus",
+    "notes": "Bring comfortable shoes"
+  },
+  {
+    "id": "ev3",
+    "title": "Kizomba Social Evening",
+    "style": "kizomba",
+    "city": "Odense",
+    "venue": "Odense Dance Hall",
+    "address": "Overgade 15, 5000 Odense",
+    "start": "2025-08-25T21:00:00",
+    "end": "2025-08-26T01:00:00",
+    "price": "Free entry",
+    "url": "https://odensedancehall.dk/kizomba-evening",
+    "organizer": "Odense Dance Community",
+    "notes": ""
+  }
+]
