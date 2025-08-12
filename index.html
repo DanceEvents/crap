@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Denmark Dance Calendar — Salsa · Bachata · Kizomba</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Denmark Dance Calendar</h1>
+    <p class="subtitle">Salsa · Bachata · Kizomba — filter by date, location, and style</p>
+  </header>
+
+  <section class="filters">
+    <div class="filter-row">
+      <label>
+        Date:
+        <input type="date" id="dateFilter" />
+      </label>
+
+      <label>
+        Location:
+        <select id="locationFilter">
+          <option value="">All</option>
+          <!-- populated dynamically -->
+        </select>
+      </label>
+
+      <fieldset class="checkboxes">
+        <legend>Dance styles</legend>
+        <label><input type="checkbox" class="typeFilter" value="salsa" checked /> Salsa</label>
+        <label><input type="checkbox" class="typeFilter" value="bachata" checked /> Bachata</label>
+        <label><input type="checkbox" class="typeFilter" value="kizomba" checked /> Kizomba</label>
+      </fieldset>
+
+      <label class="search">
+        Search:
+        <input type="search" id="searchFilter" placeholder="artist, venue, organizer…" />
+      </label>
+
+      <div class="view-switch">
+        <label>
+          View:
+          <select id="viewMode">
+            <option value="month" selected>Month</option>
+            <option value="year">Year</option>
+          </select>
+        </label>
+      </div>
+    </div>
+
+    <div class="filter-row secondary">
+      <button id="prevBtn" aria-label="Previous period">‹</button>
+      <div id="periodLabel" aria-live="polite"></div>
+      <button id="nextBtn" aria-label="Next period">›</button>
+
+      <div class="right-actions">
+        <button id="resetBtn" title="Clear all filters">Reset</button>
+        <button id="icsBtn" title="Download .ics of filtered events">Download .ics</button>
+      </div>
+    </div>
+  </section>
+
+  <main id="calendarContainer" class="calendar"></main>
+
+  <section id="listContainer" class="list-view" hidden>
+    <h2 id="listHeading"></h2>
+    <ul id="eventsList"></ul>
+  </section>
+
+  <dialog id="eventDialog">
+    <article id="eventContent"></article>
+    <form method="dialog">
+      <button>Close</button>
+    </form>
+  </dialog>
+
+  <footer class="foot">
+    <small>
+      Data source: <code>events.json</code> (edit to add/update events). 
+      Shareable filters via URL parameters.
+    </small>
+  </footer>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
