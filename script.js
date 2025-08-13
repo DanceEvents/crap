@@ -364,4 +364,3 @@ function formatDateICS(dateString) {
   const dt = new Date(dateString);
   return dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
-
