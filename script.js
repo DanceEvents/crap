@@ -1,165 +1,139 @@
-const WEEKDAYS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-const STYLES = ["salsa","bachata","kizomba"];
-const qs = (s, r=document)=>r.querySelector(s);
-const qsa = (s, r=document)=>Array.from(r.querySelectorAll(s));
+const STYLES = ["salsa", "bachata", "kizomba"];
 
 const state = {
   events: [],
-  view: "month",
-  cursor: new Date(),
   filters: {
     date: "",
     location: "",
     styles: new Set(STYLES),
     search: ""
-  }
+  },
+  view: "month", // or "year"
+  cursor: new Date()
 };
 
 document.addEventListener("DOMContentLoaded", async () => {
-  qs("#viewMode").addEventListener("change", e => { state.view = e.target.value; syncURL(); render(); });
-  qs("#prevBtn").addEventListener("click", () => { shiftPeriod(-1); });
-  qs("#nextBtn").addEventListener("click", () => { shiftPeriod(+1); });
-  qs("#resetBtn").addEventListener("click", resetFilters);
-  qs("#icsBtn").addEventListener("click", downloadICS);
-
-  qs("#dateFilter").addEventListener("change", e => { state.filters.date = e.target.value ?? ""; syncURL(); render(); });
-  qs("#locationFilter").addEventListener("change", e => { state.filters.location = e.target.value ?? ""; syncURL(); render(); });
-  qsa(".typeFilter").forEach(chk => chk.addEventListener("change", () => {
-    const v = new Set();
-    qsa(".typeFilter").forEach(c => { if (c.checked) v.add(c.value); });
-    state.filters.styles = v;
-    syncURL(); render();
-  }));
-  qs("#searchFilter").addEventListener("input", e => { state.filters.search = e.target.value.trim(); syncURL(); render(); });
-
-  await loadEvents();
+  state.events = await loadEvents();
   hydrateFiltersFromURL();
-  populateLocations();
-  render();
+  renderFilters();
+  renderCalendar();
+  setupEventListeners();
 });
 
 async function loadEvents() {
   try {
-    const res = await fetch("events.json", { cache: "no-store" });
-    if (!res.ok) throw new Error("Failed to load events.json");
-    const data = await res.json();
-    state.events = data.map((e, idx) => ({
-      id: e.id ?? `ev-${idx}`,
-      title: e.title,
-      style: (e.style || "").toLowerCase(),
-      city: e.city,
-      venue: e.venue || "",
-      address: e.address || "",
-      start: e.start,
-      end: e.end || e.start,
-      price: e.price || "",
-      url: e.url || "",
-      org: e.organizer || "",
-      notes: e.notes || ""
-    })).sort((a,b) => new Date(a.start) - new Date(b.start));
-  } catch (err) {
-    console.error(err);
-    state.events = [];
+    const resp = await fetch("events.json");
+    if (!resp.ok) throw new Error("Failed to load events.json");
+    return await resp.json();
+  } catch (e) {
+    console.error(e);
+    return [];
   }
 }
 
-function populateLocations() {
-  const sel = qs("#locationFilter");
-  const cities = [...new Set(state.events.map(e => e.city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  for (const c of cities) {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    sel.appendChild(opt);
+function renderFilters() {
+  const styleContainer = document.querySelector("#styleFilters");
+  styleContainer.innerHTML = "";
+  for (const style of STYLES) {
+    const id = `filter-${style}`;
+    const label = document.createElement("label");
+    label.htmlFor = id;
+    label.textContent = capitalize(style);
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = id;
+    checkbox.checked = state.filters.styles.has(style);
+    checkbox.addEventListener("change", () => {
+      if (checkbox.checked) state.filters.styles.add(style);
+      else state.filters.styles.delete(style);
+      syncURL();
+      renderCalendar();
+    });
+    label.prepend(checkbox);
+    styleContainer.appendChild(label);
   }
-  if (state.filters.location) sel.value = state.filters.location;
+  document.querySelector("#dateFilter").value = state.filters.date || "";
+  document.querySelector("#locationFilter").value = state.filters.location || "";
+  document.querySelector("#searchFilter").value = state.filters.search || "";
+  document.querySelector("#viewMode").value = state.view;
 }
 
-function shiftPeriod(delta) {
-  if (state.view === "month") {
-    state.cursor.setMonth(state.cursor.getMonth() + delta);
-  } else {
-    state.cursor.setFullYear(state.cursor.getFullYear() + delta);
-  }
-  syncURL();
-  render();
+function setupEventListeners() {
+  document.querySelector("#dateFilter").addEventListener("change", (e) => {
+    state.filters.date = e.target.value;
+    syncURL();
+    renderCalendar();
+  });
+  document.querySelector("#locationFilter").addEventListener("input", (e) => {
+    state.filters.location = e.target.value.trim();
+    syncURL();
+    renderCalendar();
+  });
+  document.querySelector("#searchFilter").addEventListener("input", (e) => {
+    state.filters.search = e.target.value.trim();
+    syncURL();
+    renderCalendar();
+  });
+  document.querySelector("#viewMode").addEventListener("change", (e) => {
+    state.view = e.target.value;
+    syncURL();
+    renderCalendar();
+  });
+  document.querySelector("#downloadBtn").addEventListener("click", downloadICS);
+  document.querySelector("#eventDialog").querySelector("button").addEventListener("click", () => {
+    document.querySelector("#eventDialog").close();
+  });
 }
 
-function resetFilters() {
-  qs("#dateFilter").value = "";
-  qs("#locationFilter").value = "";
-  qs("#searchFilter").value = "";
-  qsa(".typeFilter").forEach(c => c.checked = true);
-  state.filters = { date:"", location:"", styles:new Set(STYLES), search:"" };
-  state.view = "month";
-  qs("#viewMode").value = "month";
-  state.cursor = new Date();
-  syncURL();
-  render();
-}
-
-function render() {
-  const periodLabel = qs("#periodLabel");
-  const container = qs("#calendarContainer");
+function renderCalendar() {
+  const container = document.querySelector("#calendarContainer");
   container.innerHTML = "";
-  qs("#listContainer").hidden = true;
 
   if (state.view === "month") {
-    const year = state.cursor.getFullYear();
-    const month = state.cursor.getMonth();
-    periodLabel.textContent = `${state.cursor.toLocaleString('en-GB', { month:'long' })} ${year}`;
-    renderMonth(container, year, month);
-  } else {
-    const year = state.cursor.getFullYear();
-    periodLabel.textContent = `${year}`;
-    renderYear(container, year);
+    renderMonthView(container, state.cursor.getFullYear(), state.cursor.getMonth());
+  } else if (state.view === "year") {
+    renderYearView(container, state.cursor.getFullYear());
   }
 }
 
-function renderMonth(container, year, monthIndex) {
-  const wrap = document.createElement("div");
-  wrap.className = "month-grid";
+function renderMonthView(container, year, month) {
+  const card = document.createElement("div");
+  card.className = "month-card";
 
-  for (const wd of WEEKDAYS) {
+  const header = document.createElement("h2");
+  header.textContent = `${year} - ${month + 1}`;
+  card.appendChild(header);
+
+  const monthWrap = document.createElement("div");
+  monthWrap.className = "month-grid";
+
+  // Weekday headers
+  const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  for (const wd of weekdays) {
     const el = document.createElement("div");
     el.className = "weekday";
     el.textContent = wd;
-    wrap.appendChild(el);
+    monthWrap.appendChild(el);
   }
 
-  const firstOfMonth = new Date(year, monthIndex, 1);
-  let startOffset = (firstOfMonth.getDay() + 6) % 7; // Monday-first
-  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const prevMonthDays = new Date(year, monthIndex, 0).getDate();
+  const firstOfMonth = new Date(year, month, 1);
+  let startOffset = (firstOfMonth.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-  const totalCells = 42;
-  const todayStr = toISODate(new Date());
+  for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
+    const dateObj = new Date(year, month, dayNum);
+    const iso = toISODate(dateObj);
 
-  for (let cell = 0; cell < totalCells; cell++) {
     const dayEl = document.createElement("div");
     dayEl.className = "day";
-    let dateObj;
-    if (cell < startOffset) {
-      const dayNum = prevMonthDays - startOffset + cell + 1;
-      dateObj = new Date(year, monthIndex - 1, dayNum);
-      dayEl.classList.add("outside");
-    } else if (cell >= startOffset + daysInMonth) {
-      const dayNum = cell - (startOffset + daysInMonth) + 1;
-      dateObj = new Date(year, monthIndex + 1, dayNum);
-      dayEl.classList.add("outside");
-    } else {
-      const dayNum = cell - startOffset + 1;
-      dateObj = new Date(year, monthIndex, dayNum);
-    }
-
-    const iso = toISODate(dateObj);
-    if (iso === todayStr) dayEl.classList.add("today");
+    if (iso === toISODate(new Date())) dayEl.classList.add("today");
+    if (dayNum === 1) dayEl.style.gridColumnStart = startOffset + 1;
 
     const header = document.createElement("div");
     header.className = "day-header";
     const num = document.createElement("div");
     num.className = "day-num";
-    num.textContent = dateObj.getDate();
+    num.textContent = dayNum;
     header.appendChild(num);
     dayEl.appendChild(header);
 
@@ -167,33 +141,46 @@ function renderMonth(container, year, monthIndex) {
     for (const ev of dayEvents) {
       const evEl = document.createElement("div");
       evEl.className = `event ${ev.style}`;
-      evEl.textContent = ev.title;
-      evEl.title = `${ev.title} - ${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+
+      // Create clickable link for event title
+      const link = document.createElement("a");
+      link.href = ev.url || "#";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = ev.title;
+      link.title = `${ev.title} - ${new Date(ev.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+
+      evEl.appendChild(link);
       evEl.addEventListener("click", () => showEvent(ev));
+
       dayEl.appendChild(evEl);
     }
 
-    wrap.appendChild(dayEl);
+    monthWrap.appendChild(dayEl);
   }
 
-  container.appendChild(wrap);
+  card.appendChild(monthWrap);
+  container.appendChild(card);
 }
 
-function renderYear(container, year) {
+function renderYearView(container, year) {
   const grid = document.createElement("div");
   grid.className = "year-grid";
 
   for (let m = 0; m < 12; m++) {
     const card = document.createElement("div");
-    card.className = "year-card";
-    const h3 = document.createElement("h3");
-    h3.textContent = new Date(year, m, 1).toLocaleString('en-GB', { month:'long' });
-    card.appendChild(h3);
+    card.className = "month-card";
+
+    const header = document.createElement("h3");
+    header.textContent = `${year} - ${m + 1}`;
+    card.appendChild(header);
 
     const monthWrap = document.createElement("div");
     monthWrap.className = "month-grid";
 
-    for (const wd of WEEKDAYS) {
+    // Weekday headers
+    const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    for (const wd of weekdays) {
       const el = document.createElement("div");
       el.className = "weekday";
       el.textContent = wd;
@@ -204,7 +191,7 @@ function renderYear(container, year) {
     let startOffset = (firstOfMonth.getDay() + 6) % 7;
     const daysInMonth = new Date(year, m + 1, 0).getDate();
 
-    for (let dayNum=1; dayNum<=daysInMonth; dayNum++) {
+    for (let dayNum = 1; dayNum <= daysInMonth; dayNum++) {
       const dateObj = new Date(year, m, dayNum);
       const iso = toISODate(dateObj);
 
@@ -225,9 +212,18 @@ function renderYear(container, year) {
       for (const ev of dayEvents) {
         const evEl = document.createElement("div");
         evEl.className = `event ${ev.style}`;
-        evEl.textContent = ev.title;
-        evEl.title = `${ev.title} - ${new Date(ev.start).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`;
+
+        // Create clickable link for event title
+        const link = document.createElement("a");
+        link.href = ev.url || "#";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = ev.title;
+        link.title = `${ev.title} - ${new Date(ev.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+
+        evEl.appendChild(link);
         evEl.addEventListener("click", () => showEvent(ev));
+
         dayEl.appendChild(evEl);
       }
 
@@ -247,24 +243,24 @@ function getFilteredEvents() {
       if (!ev.start.startsWith(state.filters.date)) return false;
     }
     if (state.filters.location) {
-      if (ev.city !== state.filters.location) return false;
+      if (!ev.city.toLowerCase().includes(state.filters.location.toLowerCase())) return false;
     }
     if (!state.filters.styles.has(ev.style)) return false;
     if (state.filters.search) {
       const s = state.filters.search.toLowerCase();
-      if (![ev.title, ev.venue, ev.org].some(x => x.toLowerCase().includes(s))) return false;
+      if (![ev.title, ev.venue, ev.organizer].some(x => x.toLowerCase().includes(s))) return false;
     }
     return true;
   });
 }
 
 function toISODate(date) {
-  return date.toISOString().slice(0,10);
+  return date.toISOString().slice(0, 10);
 }
 
 function showEvent(ev) {
-  const dlg = qs("#eventDialog");
-  const content = qs("#eventContent");
+  const dlg = document.querySelector("#eventDialog");
+  const content = document.querySelector("#eventContent");
   content.innerHTML = `
     <h3>${ev.title}</h3>
     <div class="meta">
@@ -274,7 +270,7 @@ function showEvent(ev) {
       <strong>Start:</strong> ${new Date(ev.start).toLocaleString()}<br/>
       <strong>End:</strong> ${new Date(ev.end).toLocaleString()}<br/>
       <strong>Price:</strong> ${ev.price || 'Free'}<br/>
-      <strong>Organizer:</strong> ${ev.org || 'N/A'}<br/>
+      <strong>Organizer:</strong> ${ev.organizer || 'N/A'}<br/>
       ${ev.notes ? `<em>${ev.notes}</em><br/>` : ''}
       ${ev.url ? `<a href="${ev.url}" target="_blank" rel="noopener noreferrer">More info</a>` : ''}
     </div>
@@ -291,10 +287,11 @@ function hydrateFiltersFromURL() {
   const params = new URLSearchParams(location.search);
   if (params.has("date")) {
     state.filters.date = params.get("date");
-    qs("#dateFilter").value = state.filters.date;
+    document.querySelector("#dateFilter").value = state.filters.date;
   }
   if (params.has("location")) {
     state.filters.location = params.get("location");
+    document.querySelector("#locationFilter").value = state.filters.location;
   }
   if (params.has("styles")) {
     const styles = params.get("styles").split(",");
@@ -302,11 +299,11 @@ function hydrateFiltersFromURL() {
   }
   if (params.has("search")) {
     state.filters.search = params.get("search");
-    qs("#searchFilter").value = state.filters.search;
+    document.querySelector("#searchFilter").value = state.filters.search;
   }
   if (params.has("view")) {
     state.view = params.get("view");
-    qs("#viewMode").value = state.view;
+    document.querySelector("#viewMode").value = state.view;
   }
   if (params.has("cursor")) {
     const dt = new Date(params.get("cursor"));
@@ -342,7 +339,7 @@ function downloadICS() {
     icsLines.push("BEGIN:VEVENT");
     icsLines.push(`UID:${ev.id}@dancecalendar`);
     icsLines.push(`SUMMARY:${escapeICS(ev.title)}`);
-    icsLines.push(`DESCRIPTION:${escapeICS(ev.org || "")} - ${escapeICS(ev.venue || "")}`);
+    icsLines.push(`DESCRIPTION:${escapeICS(ev.organizer || "")} - ${escapeICS(ev.venue || "")}`);
     icsLines.push(`DTSTART:${formatDateICS(ev.start)}`);
     icsLines.push(`DTEND:${formatDateICS(ev.end)}`);
     if (ev.url) icsLines.push(`URL:${ev.url}`);
@@ -360,10 +357,11 @@ function downloadICS() {
 }
 
 function escapeICS(text) {
-  return text.replace(/\\n/g,"\\n").replace(/,/g,"\\,").replace(/;/g,"\\;").replace(/\n/g,"\\n");
+  return text.replace(/\\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
 }
 
 function formatDateICS(dateString) {
   const dt = new Date(dateString);
-  return dt.toISOString().replace(/[-:]/g,"").split(".")[0] + "Z";
+  return dt.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
 }
+
